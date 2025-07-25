@@ -117,44 +117,28 @@ public class BasicAuctionClusterClient implements EgressListener
     }
     // end::response[]
 
-    private void bidInAuction(final AeronCluster aeronCluster)
+
+    private void bidInAuction2(final AeronCluster aeronCluster)
     {
-        long keepAliveDeadlineMs = 0;
-        long nextBidDeadlineMs = System.currentTimeMillis() + ThreadLocalRandom.current().nextInt(1000);
         int bidsLeftToSend = numOfBids;
 
-        while (!Thread.currentThread().isInterrupted())
-        {
-            final long currentTimeMs = System.currentTimeMillis();
+        //Start sending bids
+        printOutput("Starting to send " + numOfBids + " bids for customerId=" + customerId);
+        long t1 = System.currentTimeMillis();
+        for (int i = 0; i< numOfBids; i++ ) {
 
-            if (nextBidDeadlineMs <= currentTimeMs && bidsLeftToSend > 0)
-            {
-                final long price = lastBidSeen + ThreadLocalRandom.current().nextInt(10);
-                final long correlationId = sendBid(aeronCluster, price);
+            final long price = lastBidSeen + ThreadLocalRandom.current().nextInt(10);
+            final long correlationId = sendBid(aeronCluster, price);
 
-                nextBidDeadlineMs = currentTimeMs + ThreadLocalRandom.current().nextInt(bidIntervalMs);
-                keepAliveDeadlineMs = currentTimeMs + 1_000;       // <1>
-                --bidsLeftToSend;
+            printOutput(
+                ">>Sent(" + (correlationId) + ", " + customerId + ", " + price + ") bidsRemaining=" +
+                --bidsLeftToSend);
 
-                printOutput(
-                    "Sent(" + (correlationId) + ", " + customerId + ", " + price + ") bidsRemaining=" +
-                    bidsLeftToSend);
-            }
-            else if (keepAliveDeadlineMs <= currentTimeMs)         // <2>
-            {
-                if (bidsLeftToSend > 0)
-                {
-                    aeronCluster.sendKeepAlive();
-                    keepAliveDeadlineMs = currentTimeMs + 1_000;   // <3>
-                }
-                else
-                {
-                    break;
-                }
-            }
 
-            idleStrategy.idle(aeronCluster.pollEgress());
         }
+        long t2 = System.currentTimeMillis();
+        printOutput("Finished sending bids in " + (t2 - t1) + "ms");
+        idleStrategy.idle(aeronCluster.pollEgress());
     }
 
     // tag::publish[]
@@ -234,7 +218,7 @@ public class BasicAuctionClusterClient implements EgressListener
                 .ingressEndpoints(ingressEndpoints)))                                                           // <5>
         {
         // end::connect[]
-            client.bidInAuction(aeronCluster);
+            client.bidInAuction2(aeronCluster);
         }
     }
 }

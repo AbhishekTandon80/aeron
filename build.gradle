@@ -865,6 +865,9 @@ project(':aeron-cluster') {
         annotationProcessor project(':aeron-annotations')
         testImplementation project(':aeron-test-support')
         testImplementation files("${layout.buildDirectory.get()}/classes/java/generatedTest")
+        implementation 'org.slf4j:slf4j-api:2.0.7'
+        implementation 'ch.qos.logback:logback-core:1.4.14'
+//        implementation 'ch.qos.logback:logback-classic:1.4.14'
     }
 
     def generatedSrcDir = file("${layout.buildDirectory.get()}/generated-src")
@@ -1151,6 +1154,9 @@ project(':aeron-samples') {
         api project(':aeron-cluster')
         implementation libs.hdrHistogram
         testImplementation project(':aeron-test-support')
+        implementation 'org.slf4j:slf4j-api:2.0.7'
+        implementation 'ch.qos.logback:logback-core:1.4.14'
+//        implementation 'ch.qos.logback:logback-classic:1.4.14'
     }
 
     java {

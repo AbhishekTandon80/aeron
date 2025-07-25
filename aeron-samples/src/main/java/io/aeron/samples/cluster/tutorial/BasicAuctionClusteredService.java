@@ -28,6 +28,7 @@ import org.agrona.collections.MutableBoolean;
 import org.agrona.concurrent.IdleStrategy;
 
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Auction service implementing the business logic.
@@ -55,6 +56,7 @@ public class BasicAuctionClusteredService implements ClusteredService
     // end::state[]
     private Cluster cluster;
     private IdleStrategy idleStrategy;
+    private AtomicReference<Cluster.Role> role = new AtomicReference<>(Cluster.Role.FOLLOWER);
 
     /**
      * {@inheritDoc}
@@ -88,7 +90,23 @@ public class BasicAuctionClusteredService implements ClusteredService
         final long customerId = buffer.getLong(offset + CUSTOMER_ID_OFFSET);
         final long price = buffer.getLong(offset + PRICE_OFFSET);
 
-        final boolean bidSucceeded = auction.attemptBid(price, customerId);                          // <2>
+        //REceived bid message, process it
+        System.out.println(">>onSessionMessage(correlationId=" + correlationId + ", customerId=" + customerId +
+            ", price=" + price + ")");
+        final boolean bidSucceeded = auction.attemptBid(price, customerId);
+        //Introduce delay in writing    // <2>
+//        try{
+            if (role!=null && role.get() == Cluster.Role.LEADER) { // <3>
+                System.out.println("Leader node processing simulated for correlationId: " + correlationId);
+            } else {
+                System.out.println("Follower node processing with dealy for correlationId: " + correlationId);
+//                Thread.sleep(1); // Simulate processing delay
+            }
+
+//        }catch (final InterruptedException e) {
+//            Thread.currentThread().interrupt();
+//            throw new RuntimeException("Interrupted while simulating processing delay", e);
+//        }
 
         if (null != session)                                                                         // <3>
         {
@@ -161,6 +179,8 @@ public class BasicAuctionClusteredService implements ClusteredService
      */
     public void onRoleChange(final Cluster.Role newRole)
     {
+        role.set(newRole);
+        System.out.println("Role Changed: " + role);
     }
 
     /**

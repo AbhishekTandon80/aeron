@@ -128,6 +128,7 @@ public class BasicAuctionClusteredServiceNode
     // tag::main[]
     public static void main(final String[] args)
     {
+        System.out.println("Starting Basic Auction Clustered Service Node...");
         final int nodeId = parseInt(System.getProperty("aeron.cluster.tutorial.nodeId"));               // <1>
         final String[] hostnames = System.getProperty(
             "aeron.cluster.tutorial.hostnames", "localhost,localhost,localhost").split(",");            // <2>

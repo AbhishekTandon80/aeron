@@ -46,6 +46,7 @@ function startAll() {
   tail -n 100 -F logs/cluster-*.log
 }
 # end::start_jvm[]
+export JVM_OPTS="--add-exports java.base/jdk.internal.misc=ALL-UNNAMED"
 
 if [[ $# -lt 1 ]]; then
   startAll
