@@ -1,0 +1,65 @@
+version: '3.8'
+
+networks:
+  aeron-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+services:
+
+  node0:
+    image: aeron-cache:1.0
+    environment:
+    - NODE_ID=0
+    - CLUSTER_ADDRESSES=172.28.0.10
+    volumes:
+      - ./node0-data:/data
+    container_name: aeron-node0
+    shm_size: "512m"
+    networks:
+      aeron-net:
+        ipv4_address: 172.28.0.10
+
+#  node1:
+#    image: aeron-cache:1.0
+#    environment:
+#      - NODE_ID=1
+#      - CLUSTER_ADDRESSES=172.28.0.10,172.28.0.11,172.28.0.12
+#    volumes:
+#      - ./node1-data:/data
+#    container_name: aeron-node1
+#    shm_size: "128m"
+#    networks:
+#      aeron-net:
+#        ipv4_address: 172.28.0.11
+
+#  node2:
+#    image: aeron-cache:1.0
+#    environment:
+#      - NODE_ID=2
+#      - CLUSTER_ADDRESSES=172.28.0.10,172.28.0.11,172.28.0.12
+#    volumes:
+#      - ./node1-data:/data
+#    container_name: aeron-node2
+#    shm_size: "128m"
+#    networks:
+#      aeron-net:
+#        ipv4_address: 172.28.0.12
+
+  spring-app:
+    image: spring-service:1.0
+    ports:
+      - "8080:8080"
+    networks:
+      aeron-net:
+        ipv4_address: 172.28.0.13
+    environment:
+      - CLUSTER_ADDRESSES=172.28.0.10
+      - EGRESS_IP=172.28.0.13
+    shm_size: "512m"
+    depends_on:
+      - node0
+
+

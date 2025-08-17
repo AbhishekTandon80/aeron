@@ -1,0 +1,10 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Cluster Client" type="Application" factoryName="Application">
+    <option name="MAIN_CLASS_NAME" value="io.aeron.samples.cluster.tutorial.BasicAuctionClusterClient" />
+    <module name="aeron.aeron-samples.main" />
+    <option name="VM_PARAMETERS" value="--add-exports java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/jdk.internal.misc=ALL-UNNAMED --add-opens java.base/java.util.zip=ALL-UNNAMED -XX:+UseBiasedLocking -XX:BiasedLockingStartupDelay=0 -XX:+UnlockExperimentalVMOptions -XX:+TrustFinalNonStaticFields -XX:+UnlockDiagnosticVMOptions -XX:GuaranteedSafepointInterval=300000       -XX:+UseParallelGC -Daeron.event.cluster.log=all        -Daeron.event.cluster.log.disable=CANVASS_POSITION,APPEND_POSITION,COMMIT_POSITION -Daeron.cluster.tutorial.customerId=4 -Daeron.cluster.tutorial.numOfBids=100 -Daeron.cluster.tutorial.bidIntervalMs=1000" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

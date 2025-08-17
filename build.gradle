@@ -1283,6 +1283,9 @@ project(':aeron-test-support') {
         implementation platform(libs.junit.bom)
         implementation "org.junit.jupiter:junit-jupiter-api"
         implementation "org.junit.jupiter:junit-jupiter-params"
+        implementation "org.slf4j:slf4j-api:2.0.7"
+        implementation "ch.qos.logback:logback-classic:1.4.14"
+
         implementation libs.mockito
     }
 
