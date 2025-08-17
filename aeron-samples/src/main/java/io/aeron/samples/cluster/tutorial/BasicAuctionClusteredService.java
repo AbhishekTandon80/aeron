@@ -25,10 +25,15 @@ import io.aeron.logbuffer.FragmentHandler;
 import io.aeron.logbuffer.Header;
 import org.agrona.*;
 import org.agrona.collections.MutableBoolean;
+import org.agrona.concurrent.BusySpinIdleStrategy;
 import org.agrona.concurrent.IdleStrategy;
 
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
+
+import org.agrona.concurrent.SleepingIdleStrategy;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Auction service implementing the business logic.
@@ -37,6 +42,8 @@ import java.util.concurrent.atomic.AtomicReference;
 public class BasicAuctionClusteredService implements ClusteredService
 // end::new_service[]
 {
+    private static final Logger logger = LoggerFactory.getLogger(BasicAuctionClusteredService.class);
+
     static final int CORRELATION_ID_OFFSET = 0;
     static final int CUSTOMER_ID_OFFSET = CORRELATION_ID_OFFSET + BitUtil.SIZE_OF_LONG;
     static final int PRICE_OFFSET = CUSTOMER_ID_OFFSET + BitUtil.SIZE_OF_LONG;
@@ -65,7 +72,7 @@ public class BasicAuctionClusteredService implements ClusteredService
     public void onStart(final Cluster cluster, final Image snapshotImage)
     {
         this.cluster = cluster;                      // <1>
-        this.idleStrategy = cluster.idleStrategy();  // <2>
+        this.idleStrategy = new SleepingIdleStrategy(500); // cluster.idleStrategy();  // <2>
 
         if (null != snapshotImage)                   // <3>
         {
@@ -90,26 +97,24 @@ public class BasicAuctionClusteredService implements ClusteredService
         final long customerId = buffer.getLong(offset + CUSTOMER_ID_OFFSET);
         final long price = buffer.getLong(offset + PRICE_OFFSET);
 
-        //REceived bid message, process it
+        //received bid message, process it
+        logger.info("Received bid message: correlationId={}, customerId={}, price={}",
+            correlationId, customerId, price);
         System.out.println(">>onSessionMessage(correlationId=" + correlationId + ", customerId=" + customerId +
-            ", price=" + price + ")");
+            ", price=" + price + ", time taken=" + (System.nanoTime() - correlationId) + ")");
         final boolean bidSucceeded = auction.attemptBid(price, customerId);
-        //Introduce delay in writing    // <2>
-//        try{
+
             if (role!=null && role.get() == Cluster.Role.LEADER) { // <3>
-                System.out.println("Leader node processing simulated for correlationId: " + correlationId);
+                logger.info("Leader node processing for correlationId: " + correlationId);
             } else {
-                System.out.println("Follower node processing with dealy for correlationId: " + correlationId);
-//                Thread.sleep(1); // Simulate processing delay
+                logger.info("Follower node processing correlationId: " + correlationId);
             }
 
-//        }catch (final InterruptedException e) {
-//            Thread.currentThread().interrupt();
-//            throw new RuntimeException("Interrupted while simulating processing delay", e);
-//        }
 
         if (null != session)                                                                         // <3>
         {
+            assert role != null;
+            System.out.println(role.get() + " node processing with for correlationId: " + session);
             egressMessageBuffer.putLong(CORRELATION_ID_OFFSET, correlationId);                       // <4>
             egressMessageBuffer.putLong(CUSTOMER_ID_OFFSET, auction.getCurrentWinningCustomerId());
             egressMessageBuffer.putLong(PRICE_OFFSET, auction.getBestPrice());

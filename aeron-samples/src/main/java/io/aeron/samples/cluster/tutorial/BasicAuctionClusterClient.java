@@ -24,11 +24,12 @@ import io.aeron.logbuffer.Header;
 import org.agrona.DirectBuffer;
 import org.agrona.ExpandableArrayBuffer;
 import org.agrona.MutableDirectBuffer;
-import org.agrona.concurrent.BackoffIdleStrategy;
-import org.agrona.concurrent.IdleStrategy;
+import org.agrona.concurrent.*;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadLocalRandom;
 
 import static io.aeron.samples.cluster.tutorial.BasicAuctionClusteredService.*;
@@ -42,7 +43,7 @@ public class BasicAuctionClusterClient implements EgressListener
 // end::client[]
 {
     private final MutableDirectBuffer actionBidBuffer = new ExpandableArrayBuffer();
-    private final IdleStrategy idleStrategy = new BackoffIdleStrategy();
+    private final IdleStrategy idleStrategy = new SleepingIdleStrategy();
     private final long customerId;
     private final int numOfBids;
     private final int bidIntervalMs;
@@ -57,8 +58,7 @@ public class BasicAuctionClusterClient implements EgressListener
      * @param numOfBids     to make as a client.
      * @param bidIntervalMs between the bids.
      */
-    public BasicAuctionClusterClient(final long customerId, final int numOfBids, final int bidIntervalMs)
-    {
+    public BasicAuctionClusterClient(final long customerId, final int numOfBids, final int bidIntervalMs) {
         this.customerId = customerId;
         this.numOfBids = numOfBids;
         this.bidIntervalMs = bidIntervalMs;
@@ -84,8 +84,8 @@ public class BasicAuctionClusterClient implements EgressListener
         lastBidSeen = currentPrice;
 
         printOutput(
-            "SessionMessage(" + clusterSessionId + ", " + correlationId + "," +
-            customerId + ", " + currentPrice + ", " + bidSucceed + ")");
+                "SessionMessage(" + (clusterSessionId) +  ", " +  (System.nanoTime()- correlationId) + "," +
+                        customerId + ", " + currentPrice + ", " + bidSucceed + ")");
     }
 
     /**
@@ -118,22 +118,20 @@ public class BasicAuctionClusterClient implements EgressListener
     // end::response[]
 
 
-    private void bidInAuction2(final AeronCluster aeronCluster)
-    {
-        int bidsLeftToSend = numOfBids;
+    private void bidInAuction2(final AeronCluster aeronCluster) throws InterruptedException {
+        int bidsLeftToSend = 10_000;
 
         //Start sending bids
-        printOutput("Starting to send " + numOfBids + " bids for customerId=" + customerId);
+        printOutput("Starting to send " + bidsLeftToSend + " bids for customerId=" + customerId);
         long t1 = System.currentTimeMillis();
-        for (int i = 0; i< numOfBids; i++ ) {
+        for (int i = 0; i < bidsLeftToSend; i++) {
 
             final long price = lastBidSeen + ThreadLocalRandom.current().nextInt(10);
             final long correlationId = sendBid(aeronCluster, price);
 
             printOutput(
-                ">>Sent(" + (correlationId) + ", " + customerId + ", " + price + ") bidsRemaining=" +
-                --bidsLeftToSend);
-
+                    ">>Sent(" + (correlationId) + ", " + customerId + ", " + price + ") bidsRemaining=" +
+                            --bidsLeftToSend);
 
         }
         long t2 = System.currentTimeMillis();
@@ -142,19 +140,20 @@ public class BasicAuctionClusterClient implements EgressListener
     }
 
     // tag::publish[]
-    private long sendBid(final AeronCluster aeronCluster, final long price)
-    {
-        final long correlationId = nextCorrelationId++;
+    private long sendBid(final AeronCluster aeronCluster, final long price) {
+        final long correlationId = System.nanoTime(); //nextCorrelationId++;
         actionBidBuffer.putLong(CORRELATION_ID_OFFSET, correlationId);            // <1>
         actionBidBuffer.putLong(CUSTOMER_ID_OFFSET, customerId);
         actionBidBuffer.putLong(PRICE_OFFSET, price);
 
+        long startTime = System.currentTimeMillis();
         idleStrategy.reset();
         while (aeronCluster.offer(actionBidBuffer, 0, BID_MESSAGE_LENGTH) < 0)    // <2>
         {
-            idleStrategy.idle(aeronCluster.pollEgress());                         // <3>
+            idleStrategy.idle();                         // <3>
+            //idleStrategy.idle(aeronCluster.pollEgress());                         // <3>
         }
-
+        System.out.println("Bid sent in " + (System.currentTimeMillis() - startTime) + "ms");
         return correlationId;
     }
     // end::publish[]
@@ -181,8 +180,7 @@ public class BasicAuctionClusterClient implements EgressListener
         return sb.toString();
     }
 
-    private void printOutput(final String message)
-    {
+    private void printOutput(final String message) {
         System.out.println(message);
     }
 
@@ -191,33 +189,53 @@ public class BasicAuctionClusterClient implements EgressListener
      *
      * @param args passed to the process.
      */
-    public static void main(final String[] args)
-    {
+    public static void main(final String[] args) throws InterruptedException {
         final int customerId = Integer.parseInt(System.getProperty("aeron.cluster.tutorial.customerId"));       // <1>
         final int numOfBids = Integer.parseInt(System.getProperty("aeron.cluster.tutorial.numOfBids"));         // <2>
         final int bidIntervalMs = Integer.parseInt(System.getProperty("aeron.cluster.tutorial.bidIntervalMs")); // <3>
 
+        System.setProperty("aeron.event.log", "all");
+        System.setProperty("aeron.event.log", "admin,network,driver");
+
         final String[] hostnames = System.getProperty(
-            "aeron.cluster.tutorial.hostnames", "localhost,localhost,localhost").split(",");
+                "aeron.cluster.tutorial.hostnames", "localhost,localhost,localhost").split(",");
         final String ingressEndpoints = ingressEndpoints(Arrays.asList(hostnames));
 
         final BasicAuctionClusterClient client = new BasicAuctionClusterClient(customerId, numOfBids, bidIntervalMs);
 
         // tag::connect[]
         try (
-            MediaDriver mediaDriver = MediaDriver.launchEmbedded(new MediaDriver.Context()                      // <1>
-                .threadingMode(ThreadingMode.SHARED)
-                .dirDeleteOnStart(true)
-                .dirDeleteOnShutdown(true));
-            AeronCluster aeronCluster = AeronCluster.connect(
-                new AeronCluster.Context()
-                .egressListener(client)                                                                         // <2>
-                .egressChannel("aeron:udp?endpoint=localhost:0")                                                // <3>
-                .aeronDirectoryName(mediaDriver.aeronDirectoryName())
-                .ingressChannel("aeron:udp")                                                                    // <4>
-                .ingressEndpoints(ingressEndpoints)))                                                           // <5>
+                MediaDriver mediaDriver = MediaDriver.launchEmbedded(new MediaDriver.Context()                      // <1>
+                        .threadingMode(ThreadingMode.DEDICATED)
+                        .dirDeleteOnStart(true)
+                        .dirDeleteOnShutdown(true)
+                        .termBufferSparseFile(false)
+                        .socketRcvbufLength(2 * 1024 * 1024)
+                        .socketSndbufLength(2 * 1024 * 1024)
+                        .conductorIdleStrategy(new BusySpinIdleStrategy())
+                        .receiverIdleStrategy(new NoOpIdleStrategy())
+                        .senderIdleStrategy(new NoOpIdleStrategy())
+                        .printConfigurationOnStart(true)
+                );
+
+                AeronCluster aeronCluster = AeronCluster.connect(
+                        new AeronCluster.Context()
+                                .egressListener(client)
+                               // .idleStrategy(new SleepingIdleStrategy())// <2>
+                                .egressChannel("aeron:udp?endpoint=localhost:0")                                                // <3>
+                                .aeronDirectoryName(mediaDriver.aeronDirectoryName())
+                                .ingressChannel("aeron:udp")                                                                    // <4>
+                                .ingressEndpoints(ingressEndpoints)))                                                           // <5>
         {
-        // end::connect[]
+            Executors.newFixedThreadPool(1).submit(new Runnable() {
+                @Override
+                public void run() {
+                    while (true) {
+                        aeronCluster.pollEgress();
+                    }
+                }
+            });
+
             client.bidInAuction2(aeronCluster);
         }
     }

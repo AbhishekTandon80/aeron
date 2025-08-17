@@ -7,6 +7,10 @@ out/
 classes/
 bin/
 
+node0
+node1
+node2
+
 # OS X
 .DS_Store
 
